@@ -93,16 +93,18 @@ namespace FileConverter.ConversionJobs
                 return;
             }
 
-            this.UserState = Properties.Resources.ConversionStateConversion;
+            try
+            {
+                this.UserState = Properties.Resources.ConversionStateConversion;
 
-            Debug.Log("Convert PowerPoint document to pdf.");
-            this.document.ExportAsFixedFormat(this.intermediateFilePath, PowerPoint.Enums.PpFixedFormatType.ppFixedFormatTypePDF);
-
-            Debug.Log($"Close PowerPoint document '{this.InputFilePath}'.");
-            this.document.Close();
-            this.document = null;
-
-            this.ReleaseOfficeApplicationInstanceIfNeeded();
+                Debug.Log("Convert PowerPoint document to pdf.");
+                this.document.SaveAs(this.intermediateFilePath, PowerPoint.Enums.PpSaveAsFileType.ppSaveAsPDF, NetOffice.OfficeApi.Enums.MsoTriState.msoFalse);
+            }
+            finally
+            {
+                Debug.Log($"Close PowerPoint document '{this.InputFilePath}'.");
+                this.ReleaseOfficeApplicationInstanceIfNeeded();
+            }
             
             if (this.pdf2ImageConversionJob != null)
             {
@@ -114,24 +116,28 @@ namespace FileConverter.ConversionJobs
 
                 Task updateProgress = this.UpdateProgress();
 
-                Debug.Log("Convert pdf to images.");
-
-                this.pdf2ImageConversionJob.StartConversion();
-
-                if (this.pdf2ImageConversionJob.State != ConversionState.Done)
+                try
                 {
-                    this.ConversionFailed(this.pdf2ImageConversionJob.ErrorMessage);
-                    return;
-                }
+                    Debug.Log("Convert pdf to images.");
 
-                if (!string.IsNullOrEmpty(this.intermediateFilePath))
+                    this.pdf2ImageConversionJob.StartConversion();
+
+                    if (this.pdf2ImageConversionJob.State != ConversionState.Done)
+                    {
+                        this.ConversionFailed(this.pdf2ImageConversionJob.ErrorMessage);
+                        return;
+                    }
+                }
+                finally
                 {
-                    Debug.Log($"Delete intermediate file {this.intermediateFilePath}.");
+                    if (!string.IsNullOrEmpty(this.intermediateFilePath))
+                    {
+                        Debug.Log($"Delete intermediate file {this.intermediateFilePath}.");
+                        this.DeleteFileIfExists(this.intermediateFilePath);
+                    }
 
-                    File.Delete(this.intermediateFilePath);
+                    updateProgress.Wait();
                 }
-
-                updateProgress.Wait();
             }
         }
 
@@ -149,27 +155,43 @@ namespace FileConverter.ConversionJobs
 
         protected override void ReleaseOfficeApplicationInstanceIfNeeded()
         {
+            if (this.document != null)
+            {
+                try
+                {
+                    this.document.Close();
+                }
+                catch (Exception)
+                {
+                }
+
+                this.document = null;
+            }
+
             if (this.application == null)
             {
                 return;
             }
 
             Diagnostics.Debug.Log("Quit PowerPoint application via interop.");
-            this.application.Quit();
+            try
+            {
+                this.application.Quit();
+            }
+            catch (Exception)
+            {
+            }
+
             this.application = null;
         }
 
         private async Task UpdateProgress()
         {
-            while (this.pdf2ImageConversionJob.State != ConversionState.Done &&
+            while (this.pdf2ImageConversionJob != null &&
+                   this.pdf2ImageConversionJob.State != ConversionState.Done &&
                    this.pdf2ImageConversionJob.State != ConversionState.Failed)
             {
-                if (this.pdf2ImageConversionJob != null && this.pdf2ImageConversionJob.State == ConversionState.InProgress)
-                {
-                    this.Progress = this.pdf2ImageConversionJob.Progress;
-                }
-
-                if (this.pdf2ImageConversionJob != null && this.pdf2ImageConversionJob.State == ConversionState.InProgress)
+                if (this.pdf2ImageConversionJob.State == ConversionState.InProgress)
                 {
                     this.Progress = this.pdf2ImageConversionJob.Progress;
                     this.UserState = this.pdf2ImageConversionJob.UserState;

@@ -48,7 +48,7 @@ namespace FileConverter.ConversionJobs
                 Excel.Worksheet worksheet = sheet as Excel.Worksheet;
                 if (worksheet != null)
                 {
-                    pagesCount = worksheet.PageSetup.Pages.Count;
+                    pagesCount += worksheet.PageSetup.Pages.Count;
                 }
             }
 
@@ -102,19 +102,21 @@ namespace FileConverter.ConversionJobs
                 return;
             }
 
-            // Make this document the active document.
-            this.document.Activate();
+            try
+            {
+                // Make this document the active document.
+                this.document.Activate();
 
-            this.UserState = Properties.Resources.ConversionStateConversion;
+                this.UserState = Properties.Resources.ConversionStateConversion;
 
-            Debug.Log("Convert excel document to pdf.");
-            this.document.ExportAsFixedFormat(Excel.Enums.XlFixedFormatType.xlTypePDF, this.intermediateFilePath);
-
-            Debug.Log($"Close excel document '{this.InputFilePath}'.");
-            this.document.Close(false);
-            this.document = null;
-
-            this.ReleaseOfficeApplicationInstanceIfNeeded();
+                Debug.Log("Convert excel document to pdf.");
+                this.document.ExportAsFixedFormat(Excel.Enums.XlFixedFormatType.xlTypePDF, this.intermediateFilePath);
+            }
+            finally
+            {
+                Debug.Log($"Close excel document '{this.InputFilePath}'.");
+                this.ReleaseOfficeApplicationInstanceIfNeeded();
+            }
             
             if (this.pdf2ImageConversionJob != null)
             {
@@ -126,24 +128,28 @@ namespace FileConverter.ConversionJobs
 
                 Task updateProgress = this.UpdateProgress();
 
-                Debug.Log("Convert pdf to images.");
-
-                this.pdf2ImageConversionJob.StartConversion();
-
-                if (this.pdf2ImageConversionJob.State != ConversionState.Done)
+                try
                 {
-                    this.ConversionFailed(this.pdf2ImageConversionJob.ErrorMessage);
-                    return;
-                }
+                    Debug.Log("Convert pdf to images.");
 
-                if (!string.IsNullOrEmpty(this.intermediateFilePath))
+                    this.pdf2ImageConversionJob.StartConversion();
+
+                    if (this.pdf2ImageConversionJob.State != ConversionState.Done)
+                    {
+                        this.ConversionFailed(this.pdf2ImageConversionJob.ErrorMessage);
+                        return;
+                    }
+                }
+                finally
                 {
-                    Debug.Log($"Delete intermediate file {this.intermediateFilePath}.");
+                    if (!string.IsNullOrEmpty(this.intermediateFilePath))
+                    {
+                        Debug.Log($"Delete intermediate file {this.intermediateFilePath}.");
+                        this.DeleteFileIfExists(this.intermediateFilePath);
+                    }
 
-                    File.Delete(this.intermediateFilePath);
+                    updateProgress.Wait();
                 }
-
-                updateProgress.Wait();
             }
         }
 
@@ -164,27 +170,43 @@ namespace FileConverter.ConversionJobs
 
         protected override void ReleaseOfficeApplicationInstanceIfNeeded()
         {
+            if (this.document != null)
+            {
+                try
+                {
+                    this.document.Close(false);
+                }
+                catch (Exception)
+                {
+                }
+
+                this.document = null;
+            }
+
             if (this.application == null)
             {
                 return;
             }
 
             Diagnostics.Debug.Log("Quit excel application via interop.");
-            this.application.Quit();
+            try
+            {
+                this.application.Quit();
+            }
+            catch (Exception)
+            {
+            }
+
             this.application = null;
         }
 
         private async Task UpdateProgress()
         {
-            while (this.pdf2ImageConversionJob.State != ConversionState.Done &&
+            while (this.pdf2ImageConversionJob != null &&
+                   this.pdf2ImageConversionJob.State != ConversionState.Done &&
                    this.pdf2ImageConversionJob.State != ConversionState.Failed)
             {
-                if (this.pdf2ImageConversionJob != null && this.pdf2ImageConversionJob.State == ConversionState.InProgress)
-                {
-                    this.Progress = this.pdf2ImageConversionJob.Progress;
-                }
-
-                if (this.pdf2ImageConversionJob != null && this.pdf2ImageConversionJob.State == ConversionState.InProgress)
+                if (this.pdf2ImageConversionJob.State == ConversionState.InProgress)
                 {
                     this.Progress = this.pdf2ImageConversionJob.Progress;
                     this.UserState = this.pdf2ImageConversionJob.UserState;
