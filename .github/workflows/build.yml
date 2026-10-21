@@ -62,8 +62,9 @@ jobs:
           $msi = Get-ChildItem -Path . -Filter "*.msi" -Recurse | Select-Object -First 1
           if ($msi) {
             Write-Host "Found MSI installer at: $($msi.FullName)"
-            # Copy to root artifact staging
+            # Copy to root artifact staging with upstream naming convention
             New-Item -ItemType Directory -Force -Path "staging\installer" | Out-Null
+            Copy-Item $msi.FullName -Destination "staging\installer\FileConverter-2.2.1-x64-setup.msi"
             Copy-Item $msi.FullName -Destination "staging\installer\FileConverter-x64-Setup.msi"
           } else {
             Write-Error "No .msi installer was generated during build."
@@ -80,7 +81,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: FileConverter-x64-Setup-MSI
-          path: staging/installer/FileConverter-x64-Setup.msi
+          path: staging/installer/
           if-no-files-found: error
           retention-days: 30
 
@@ -115,9 +116,11 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/FileConverter-x64-Setup.msi
+          name: File Converter v2.2.1
+          files: |
+            dist/FileConverter-2.2.1-x64-setup.msi
+          body_path: RELEASE_NOTES.md
           draft: false
           prerelease: false
-          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
