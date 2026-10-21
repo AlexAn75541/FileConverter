@@ -189,6 +189,9 @@
                 <RegistryKey Root="HKCU" Key="Software\FileConverter" ForceDeleteOnUninstall="yes">
                     <RegistryValue Name="Path" Type="string" Value="[INSTALLFOLDER]FileConverter.exe" />
                 </RegistryKey>
+                <RegistryKey Root="HKLM" Key="Software\FileConverter" ForceDeleteOnUninstall="yes">
+                    <RegistryValue Name="Path" Type="string" Value="[INSTALLFOLDER]FileConverter.exe" />
+                </RegistryKey>
             </Component>
         </ComponentGroup>
     </Fragment>
