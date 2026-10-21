@@ -19,8 +19,8 @@ namespace FileConverter.ConversionJobs
         {
             base.Cancel();
 
-            this.pngConversionJob.Cancel();
-            this.icoConversionJob.Cancel();
+            this.pngConversionJob?.Cancel();
+            this.icoConversionJob?.Cancel();
         }
 
         protected override void Initialize()
@@ -56,29 +56,36 @@ namespace FileConverter.ConversionJobs
                 throw new Exception("The conversion preset must be valid.");
             }
 
-            Diagnostics.Debug.Log(string.Empty);
-            Diagnostics.Debug.Log("Convert image to PNG (intermediate format).");
-            this.pngConversionJob.StartConversion();
-
-            if (this.pngConversionJob.State != ConversionState.Done)
+            try
             {
-                this.ConversionFailed(this.pngConversionJob.ErrorMessage);
-                return;
+                Diagnostics.Debug.Log(string.Empty);
+                Diagnostics.Debug.Log("Convert image to PNG (intermediate format).");
+                this.pngConversionJob.StartConversion();
+
+                if (this.pngConversionJob.State != ConversionState.Done)
+                {
+                    this.ConversionFailed(this.pngConversionJob.ErrorMessage);
+                    return;
+                }
+
+                Diagnostics.Debug.Log(string.Empty);
+                Diagnostics.Debug.Log("Convert png intermediate image to ICO.");
+                this.icoConversionJob.StartConversion();
+
+                if (this.icoConversionJob.State != ConversionState.Done)
+                {
+                    this.ConversionFailed(this.icoConversionJob.ErrorMessage);
+                    return;
+                }
             }
-
-            Diagnostics.Debug.Log(string.Empty);
-            Diagnostics.Debug.Log("Convert png intermediate image to ICO.");
-            this.icoConversionJob.StartConversion();
-
-            if (this.icoConversionJob.State != ConversionState.Done)
+            finally
             {
-                this.ConversionFailed(this.icoConversionJob.ErrorMessage);
-                return;
+                if (!string.IsNullOrEmpty(this.intermediateFilePath))
+                {
+                    Diagnostics.Debug.Log($"Delete intermediate file {this.intermediateFilePath}.");
+                    this.DeleteFileIfExists(this.intermediateFilePath);
+                }
             }
-
-            Diagnostics.Debug.Log($"Delete intermediate file {this.intermediateFilePath}.");
-
-            File.Delete(this.intermediateFilePath);
         }
     }
 }

@@ -33,10 +33,14 @@ namespace FileConverterExtension
             {
                 if (PathHelpers.fileConverterRegistryKey == null)
                 {
-                    PathHelpers.fileConverterRegistryKey = Registry.CurrentUser.OpenSubKey(@"Software\FileConverter");
-                    if (PathHelpers.fileConverterRegistryKey == null)
+                    try
                     {
-                        throw new Exception("Can't retrieve file converter registry entry.");
+                        PathHelpers.fileConverterRegistryKey = Registry.CurrentUser.OpenSubKey(@"Software\FileConverter")
+                            ?? Registry.LocalMachine.OpenSubKey(@"Software\FileConverter");
+                    }
+                    catch
+                    {
+                        PathHelpers.fileConverterRegistryKey = null;
                     }
                 }
 
@@ -50,7 +54,29 @@ namespace FileConverterExtension
             {
                 if (string.IsNullOrEmpty(PathHelpers.fileConverterPath))
                 {
-                    PathHelpers.fileConverterPath = PathHelpers.FileConverterRegistryKey.GetValue("Path") as string;
+                    try
+                    {
+                        PathHelpers.fileConverterPath = PathHelpers.FileConverterRegistryKey?.GetValue("Path") as string;
+                    }
+                    catch
+                    {
+                    }
+
+                    if (string.IsNullOrEmpty(PathHelpers.fileConverterPath))
+                    {
+                        try
+                        {
+                            string localDir = Path.GetDirectoryName(typeof(PathHelpers).Assembly.Location);
+                            string localExe = Path.Combine(localDir, "FileConverter.exe");
+                            if (File.Exists(localExe))
+                            {
+                                PathHelpers.fileConverterPath = localExe;
+                            }
+                        }
+                        catch
+                        {
+                        }
+                    }
                 }
 
                 return PathHelpers.fileConverterPath;

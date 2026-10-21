@@ -40,7 +40,7 @@ namespace FileConverter.ConversionJobs
         {
             base.Cancel();
 
-            this.compressionConversionJob.Cancel();
+            this.compressionConversionJob?.Cancel();
         }
 
         protected override void Initialize()
@@ -138,26 +138,36 @@ namespace FileConverter.ConversionJobs
                 return;
             }
 
-            if (!this.diskDrive.LockCD())
+            bool cdLocked = false;
+            try
             {
-                Debug.Log("Can\'t lock cd.");
-                this.ConversionFailed(Properties.Resources.ErrorCDDriveNotReady);
-                return;
+                if (!this.diskDrive.LockCD())
+                {
+                    Debug.Log("Can\'t lock cd.");
+                    this.ConversionFailed(Properties.Resources.ErrorCDDriveNotReady);
+                    return;
+                }
+
+                cdLocked = true;
+
+                WaveFormat waveFormat = new WaveFormat(44100, 16, 2);
+
+                using (Stream waveStream = new FileStream(this.intermediateFilePath, FileMode.Create, FileAccess.Write))
+                using (this.waveWriter = new WaveWriter(waveStream, waveFormat, this.diskDrive.TrackSize(this.cdaTrackNumber)))
+                {
+                    this.diskDrive.ReadTrack(this.cdaTrackNumber, this.WriteWaveData, this.CdReadProgress);
+                }
             }
-
-            WaveFormat waveFormat = new WaveFormat(44100, 16, 2);
-
-            using (Stream waveStream = new FileStream(this.intermediateFilePath, FileMode.Create, FileAccess.Write))
-            using (this.waveWriter = new WaveWriter(waveStream, waveFormat, this.diskDrive.TrackSize(this.cdaTrackNumber)))
+            finally
             {
-                this.diskDrive.ReadTrack(this.cdaTrackNumber, this.WriteWaveData, this.CdReadProgress);
+                this.waveWriter = null;
+                if (cdLocked)
+                {
+                    this.diskDrive.UnLockCD();
+                }
+
+                this.diskDrive.Close();
             }
-
-            this.waveWriter = null;
-
-            this.diskDrive.UnLockCD();
-
-            this.diskDrive.Close();
 
             this.StateFlags = ConversionFlags.None;
 
@@ -179,18 +189,25 @@ namespace FileConverter.ConversionJobs
                 this.compressionConversionJob.State != ConversionState.Failed)
             {
                 this.Progress = this.compressionConversionJob.Progress;
+                System.Threading.Thread.Sleep(50);
+            }
+
+            if (this.compressionThread != null && this.compressionThread.IsAlive)
+            {
+                this.compressionThread.Join();
             }
 
             if (this.compressionConversionJob.State == ConversionState.Failed)
             {
                 this.ConversionFailed(this.compressionConversionJob.ErrorMessage);
+                this.DeleteFileIfExists(this.intermediateFilePath);
                 return;
             }
 
             Debug.Log(string.Empty);
             Debug.Log($"Delete intermediate file {this.intermediateFilePath}.");
 
-            File.Delete(this.intermediateFilePath);
+            this.DeleteFileIfExists(this.intermediateFilePath);
         }
 
         private void WriteWaveData(object sender, DataReadEventArgs eventArgs)

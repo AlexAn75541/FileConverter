@@ -1,0 +1,122 @@
+name: Build & Package
+
+on:
+  push:
+    branches:
+      - integration
+      - master
+      - 'release/**'
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - integration
+      - master
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: 'Publish GitHub Release (halted by default until explicit call)'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build & Package (x64)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v2
+
+      - name: Restore NuGet Packages
+        run: |
+          nuget restore FileConverter.sln
+          dotnet restore Installer\Installer.wixproj
+
+      - name: Build Solution (Release x64)
+        run: |
+          msbuild FileConverter.sln /p:Configuration=Release /p:Platform="x64" /m /v:minimal
+
+      - name: Locate MSI and Binaries
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem -Path . -Filter "*.msi" -Recurse | Select-Object -First 1
+          if ($msi) {
+            Write-Host "Found MSI installer at: $($msi.FullName)"
+            # Copy to root artifact staging
+            New-Item -ItemType Directory -Force -Path "staging\installer" | Out-Null
+            Copy-Item $msi.FullName -Destination "staging\installer\FileConverter-x64-Setup.msi"
+          } else {
+            Write-Error "No .msi installer was generated during build."
+          }
+
+          $binDir = "Application\FileConverter\bin\x64\Release"
+          if (Test-Path $binDir) {
+            Write-Host "Found compiled application binaries in: $binDir"
+          } else {
+            Write-Warning "Could not find $binDir"
+          }
+
+      - name: Upload MSI Installer Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FileConverter-x64-Setup-MSI
+          path: staging/installer/FileConverter-x64-Setup.msi
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload Application Binaries Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FileConverter-x64-Binaries
+          path: |
+            Application/FileConverter/bin/x64/Release/
+            !Application/FileConverter/bin/x64/Release/**/*.pdb
+          if-no-files-found: warn
+          retention-days: 14
+
+  publish:
+    name: Publish GitHub Release
+    needs: build
+    if: (github.event_name == 'workflow_dispatch' && inputs.publish_release == true) || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download MSI Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: FileConverter-x64-Setup-MSI
+          path: dist
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/FileConverter-x64-Setup.msi
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

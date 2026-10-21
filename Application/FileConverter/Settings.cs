@@ -26,13 +26,29 @@ namespace FileConverter
 
         public ConversionPreset GetPresetFromName(string presetName)
         {
-            return this.conversionPresets.FirstOrDefault(match => match.FullName == presetName);
+            if (string.IsNullOrEmpty(presetName) || this.conversionPresets == null)
+            {
+                return null;
+            }
+
+            return this.conversionPresets.FirstOrDefault(match => match != null && match.FullName == presetName);
         }
 
         public void Clean()
         {
-            for (int index = 0; index < this.ConversionPresets.Count; index++)
+            if (this.ConversionPresets == null)
             {
+                return;
+            }
+
+            for (int index = this.ConversionPresets.Count - 1; index >= 0; index--)
+            {
+                if (this.ConversionPresets[index] == null)
+                {
+                    this.ConversionPresets.RemoveAt(index);
+                    continue;
+                }
+
                 this.ConversionPresets[index].Clean();
             }
         }
@@ -47,7 +63,7 @@ namespace FileConverter
             for (int index = 0; index < settings.conversionPresets.Count; index++)
             {
                 ConversionPreset conversionPreset = settings.conversionPresets[index];
-                if (this.conversionPresets.Any(match => match.FullName == conversionPreset.FullName))
+                if (conversionPreset == null || this.conversionPresets.Any(match => match != null && match.FullName == conversionPreset.FullName))
                 {
                     continue;
                 }
@@ -112,7 +128,14 @@ namespace FileConverter
                     return;
                 }
 
-                this.ApplicationLanguage = CultureInfo.GetCultureInfo(value);
+                try
+                {
+                    this.ApplicationLanguage = CultureInfo.GetCultureInfo(value);
+                }
+                catch (CultureNotFoundException)
+                {
+                    this.ApplicationLanguage = null;
+                }
             }
         }
 

@@ -79,7 +79,7 @@ namespace FileConverter.ConversionJobs
             {
                 CreateNoWindow = true, 
                 UseShellExecute = false, 
-                RedirectStandardOutput = true, 
+                RedirectStandardOutput = false, 
                 RedirectStandardError = true
             };
 
@@ -88,7 +88,7 @@ namespace FileConverter.ConversionJobs
 
         protected virtual void FillFFMpegArgumentsList()
         {
-            const string baseArgs = "-n -progress pipe:1";
+            const string baseArgs = "-n";
 
             bool customCommandEnabled = this.ConversionPreset.GetSettingsValue<bool>(ConversionPreset.ConversionSettingKeys.EnableFFMPEGCustomCommand);
             if (customCommandEnabled)
@@ -195,7 +195,7 @@ namespace FileConverter.ConversionJobs
 
                 case OutputType.Ico:
                     {
-                        string encoderArgs = string.Empty;
+                        string encoderArgs = "-pix_fmt bgra";
                         string arguments = $"{baseArgs} -i \"{this.InputFilePath}\" {encoderArgs} \"{this.OutputFilePath}\"";
 
                         this.ffmpegArgumentStringByPass.Add(new FFMpegPass(arguments));
@@ -432,67 +432,81 @@ namespace FileConverter.ConversionJobs
                 throw new Exception("The conversion preset must be valid.");
             }
 
-            for (int index = 0; index < this.ffmpegArgumentStringByPass.Count; index++)
+            try
             {
-                FFMpegPass currentPass = this.ffmpegArgumentStringByPass[index];
-
-                this.UserState = currentPass.Name;
-                this.ffmpegProcessStartInfo.Arguments = currentPass.Arguments;
-
-                Diagnostics.Debug.Log($"Execute command: {this.ffmpegProcessStartInfo.FileName} {this.ffmpegProcessStartInfo.Arguments}.");
-                Diagnostics.Debug.Log(string.Empty);
-
-                try
+                for (int index = 0; index < this.ffmpegArgumentStringByPass.Count; index++)
                 {
-                    using (Process exeProcess = Process.Start(this.ffmpegProcessStartInfo))
+                    if (this.State == ConversionState.Failed || this.CancelIsRequested)
                     {
-                        using (StreamReader reader = exeProcess.StandardError)
+                        break;
+                    }
+
+                    FFMpegPass currentPass = this.ffmpegArgumentStringByPass[index];
+
+                    this.UserState = currentPass.Name;
+                    this.ffmpegProcessStartInfo.Arguments = currentPass.Arguments;
+
+                    Diagnostics.Debug.Log($"Execute command: {this.ffmpegProcessStartInfo.FileName} {this.ffmpegProcessStartInfo.Arguments}.");
+                    Diagnostics.Debug.Log(string.Empty);
+
+                    try
+                    {
+                        using (Process exeProcess = Process.Start(this.ffmpegProcessStartInfo))
                         {
-                            while (!reader.EndOfStream)
+                            using (StreamReader reader = exeProcess.StandardError)
                             {
-                                if (this.CancelIsRequested && !exeProcess.HasExited)
+                                while (!reader.EndOfStream)
                                 {
-                                    exeProcess.Kill();
+                                    if (this.CancelIsRequested && !exeProcess.HasExited)
+                                    {
+                                        exeProcess.Kill();
+                                    }
+
+                                    string result = reader.ReadLine();
+
+                                    this.ParseFFMPEGOutput(result);
+
+                                    Diagnostics.Debug.Log($"ffmpeg output: {result}");
                                 }
-
-                                string result = reader.ReadLine();
-
-                                this.ParseFFMPEGOutput(result);
-
-                                Diagnostics.Debug.Log($"ffmpeg output: {result}");
                             }
-                        }
 
-                        exeProcess.WaitForExit();
+                            exeProcess.WaitForExit();
+                        }
+                    }
+                    catch
+                    {
+                        this.ConversionFailed(Properties.Resources.ErrorFailedToLaunchFFMPEG);
+                        throw;
                     }
                 }
-                catch
-                {
-                    this.ConversionFailed(Properties.Resources.ErrorFailedToLaunchFFMPEG);
-                    throw;
-                }
             }
-
-            Diagnostics.Debug.Log(string.Empty);
-
-            // Clean intermediate files.
-            for (int index = 0; index < this.ffmpegArgumentStringByPass.Count; index++)
+            finally
             {
-                FFMpegPass currentPass = this.ffmpegArgumentStringByPass[index];
+                Diagnostics.Debug.Log(string.Empty);
 
-                if (string.IsNullOrEmpty(currentPass.FileToDelete))
+                // Clean intermediate files.
+                for (int index = 0; index < this.ffmpegArgumentStringByPass.Count; index++)
                 {
-                    continue;
+                    FFMpegPass currentPass = this.ffmpegArgumentStringByPass[index];
+
+                    if (string.IsNullOrEmpty(currentPass.FileToDelete))
+                    {
+                        continue;
+                    }
+
+                    Diagnostics.Debug.Log($"Delete intermediate file {currentPass.FileToDelete}.");
+
+                    this.DeleteFileIfExists(currentPass.FileToDelete);
                 }
-
-                Diagnostics.Debug.Log($"Delete intermediate file {currentPass.FileToDelete}.");
-
-                File.Delete(currentPass.FileToDelete);
             }
         }
 
         private void ParseFFMPEGOutput(string input)
         {
+            if (string.IsNullOrEmpty(input))
+            {
+                return;
+            }
             Match match = this.durationRegex.Match(input);
             if (match.Success && match.Groups.Count >= 6)
             {

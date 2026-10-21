@@ -526,7 +526,7 @@ namespace FileConverter.ViewModels
 
             this.saveCommand.NotifyCanExecuteChanged();
 
-            this.OnFolderCreated();
+            this.OnFolderCreated?.Invoke();
         }
 
         private bool CanDuplicateSelectedPreset()
@@ -584,7 +584,7 @@ namespace FileConverter.ViewModels
 
             this.SelectedItem = node;
 
-            this.OnPresetCreated.Invoke();
+            this.OnPresetCreated?.Invoke();
 
             this.removePresetCommand.NotifyCanExecuteChanged();
             this.saveCommand.NotifyCanExecuteChanged();
@@ -687,6 +687,11 @@ namespace FileConverter.ViewModels
 
         private void RemoveSelectedPreset()
         {
+            if (this.SelectedItem == null || this.SelectedItem == this.presetsRootFolder || this.SelectedItem.Parent == null)
+            {
+                return;
+            }
+
             this.SelectedItem.PropertyChanged -= this.NodePropertyChanged;
 
             this.SelectedItem.Parent.Children.Remove(this.SelectedItem);
@@ -699,7 +704,7 @@ namespace FileConverter.ViewModels
 
         private bool CanRemoveSelectedPreset()
         {
-            return this.SelectedItem != null;
+            return this.SelectedItem != null && this.SelectedItem != this.presetsRootFolder && this.SelectedItem.Parent != null;
         }
 
         protected override void OnDeactivated()

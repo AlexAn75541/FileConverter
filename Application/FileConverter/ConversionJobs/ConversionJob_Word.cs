@@ -94,30 +94,21 @@ namespace FileConverter.ConversionJobs
                 return;
             }
 
-            // Make this document the active document.
-            this.document.Activate();
+            try
+            {
+                // Make this document the active document.
+                this.document.Activate();
 
-            this.UserState = Properties.Resources.ConversionStateConversion;
+                this.UserState = Properties.Resources.ConversionStateConversion;
 
-            Debug.Log("Convert word document to pdf.");
-            // this.document.ExportAsFixedFormat(this.intermediateFilePath, Word.WdExportFormat.wdExportFormatPDF);
-            this.document.ExportAsFixedFormat(this.intermediateFilePath, 
-                Word.Enums.WdExportFormat.wdExportFormatPDF, 
-                false, 
-                Word.Enums.WdExportOptimizeFor.wdExportOptimizeForPrint, 
-                Word.Enums.WdExportRange.wdExportAllDocument, 
-                1, 1, 
-                Word.Enums.WdExportItem.wdExportDocumentContent, 
-                true, 
-                true, 
-                Word.Enums.WdExportCreateBookmarks.wdExportCreateHeadingBookmarks, 
-                true);
-
-            Debug.Log($"Close word document '{this.InputFilePath}'.");
-            this.document.Close(Word.Enums.WdSaveOptions.wdDoNotSaveChanges);
-            this.document = null;
-
-            this.ReleaseOfficeApplicationInstanceIfNeeded();
+                Debug.Log("Convert word document to pdf.");
+                this.document.SaveAs(this.intermediateFilePath, Word.Enums.WdSaveFormat.wdFormatPDF);
+            }
+            finally
+            {
+                Debug.Log($"Close word document '{this.InputFilePath}'.");
+                this.ReleaseOfficeApplicationInstanceIfNeeded();
+            }
             
             if (this.pdf2ImageConversionJob != null)
             {
@@ -129,24 +120,28 @@ namespace FileConverter.ConversionJobs
 
                 Task updateProgress = this.UpdateProgress();
 
-                Debug.Log("Convert pdf to images.");
-
-                this.pdf2ImageConversionJob.StartConversion();
-
-                if (this.pdf2ImageConversionJob.State != ConversionState.Done)
+                try
                 {
-                    this.ConversionFailed(this.pdf2ImageConversionJob.ErrorMessage);
-                    return;
-                }
+                    Debug.Log("Convert pdf to images.");
 
-                if (!string.IsNullOrEmpty(this.intermediateFilePath))
+                    this.pdf2ImageConversionJob.StartConversion();
+
+                    if (this.pdf2ImageConversionJob.State != ConversionState.Done)
+                    {
+                        this.ConversionFailed(this.pdf2ImageConversionJob.ErrorMessage);
+                        return;
+                    }
+                }
+                finally
                 {
-                    Debug.Log($"Delete intermediate file {this.intermediateFilePath}.");
+                    if (!string.IsNullOrEmpty(this.intermediateFilePath))
+                    {
+                        Debug.Log($"Delete intermediate file {this.intermediateFilePath}.");
+                        this.DeleteFileIfExists(this.intermediateFilePath);
+                    }
 
-                    File.Delete(this.intermediateFilePath);
+                    updateProgress.Wait();
                 }
-
-                updateProgress.Wait();
             }
         }
 
@@ -161,33 +156,50 @@ namespace FileConverter.ConversionJobs
             Debug.Log("Instantiate word application via interop.");
             this.application = new Word.Application
             {
-                Visible = false
+                Visible = false,
+                DisplayAlerts = Word.Enums.WdAlertLevel.wdAlertsNone
             };
         }
 
         protected override void ReleaseOfficeApplicationInstanceIfNeeded()
         {
+            if (this.document != null)
+            {
+                try
+                {
+                    this.document.Close(Word.Enums.WdSaveOptions.wdDoNotSaveChanges);
+                }
+                catch (Exception)
+                {
+                }
+
+                this.document = null;
+            }
+
             if (this.application == null)
             {
                 return;
             }
 
             Diagnostics.Debug.Log("Quit word application via interop.");
-            this.application.Quit();
+            try
+            {
+                this.application.Quit(Word.Enums.WdSaveOptions.wdDoNotSaveChanges);
+            }
+            catch (Exception)
+            {
+            }
+
             this.application = null;
         }
 
         private async Task UpdateProgress()
         {
-            while (this.pdf2ImageConversionJob.State != ConversionState.Done &&
+            while (this.pdf2ImageConversionJob != null &&
+                   this.pdf2ImageConversionJob.State != ConversionState.Done &&
                    this.pdf2ImageConversionJob.State != ConversionState.Failed)
             {
-                if (this.pdf2ImageConversionJob != null && this.pdf2ImageConversionJob.State == ConversionState.InProgress)
-                {
-                    this.Progress = this.pdf2ImageConversionJob.Progress;
-                }
-
-                if (this.pdf2ImageConversionJob != null && this.pdf2ImageConversionJob.State == ConversionState.InProgress)
+                if (this.pdf2ImageConversionJob.State == ConversionState.InProgress)
                 {
                     this.Progress = this.pdf2ImageConversionJob.Progress;
                     this.UserState = this.pdf2ImageConversionJob.UserState;

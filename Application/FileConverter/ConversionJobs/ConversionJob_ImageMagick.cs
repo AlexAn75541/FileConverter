@@ -23,12 +23,17 @@ namespace FileConverter.ConversionJobs
         {
         }
 
+        private static void SetupGhostscriptDirectory()
+        {
+            string applicationDirectory = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+            MagickNET.SetGhostscriptDirectory(applicationDirectory);
+        }
+
         protected override void Initialize()
         {
             base.Initialize();
 
-            string applicationDirectory = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-            MagickNET.SetGhostscriptDirectory(applicationDirectory);
+            SetupGhostscriptDirectory();
 
             this.isInputFilePdf = System.IO.Path.GetExtension(this.InputFilePath).ToLowerInvariant() == ".pdf";
 
@@ -42,10 +47,10 @@ namespace FileConverter.ConversionJobs
         {
             if (System.IO.Path.GetExtension(this.InputFilePath).ToLowerInvariant() == ".pdf")
             {
+                SetupGhostscriptDirectory();
+
                 using (MagickImageCollection images = new MagickImageCollection())
                 {
-                    MagickReadSettings settings = new MagickReadSettings();
-                    settings.Density = new Density(1, 1);
                     images.Read(this.InputFilePath);
 
                     return images.Count;
@@ -91,6 +96,12 @@ namespace FileConverter.ConversionJobs
                         readSettings.Format = MagickFormat.Dng;
                         break;
 
+                    case ".svg":
+                        readSettings.BackgroundColor = this.ConversionPreset.OutputType == OutputType.Jpg
+                            ? MagickColors.White
+                            : MagickColors.Transparent;
+                        break;
+
                     case ".gif":
                         // Get the first frame of the gif for conversion.
                         // Maybe in the future make this user selectable.
@@ -112,6 +123,7 @@ namespace FileConverter.ConversionJobs
         private void ConvertPdf()
         {
             MagickReadSettings settings = new MagickReadSettings();
+            settings.BackgroundColor = MagickColors.White;
 
             float dpi = BaseDpiForPdfConversion;
             float scaleFactor = this.ConversionPreset.GetSettingsValue<float>(ConversionPreset.ConversionSettingKeys.ImageScale);
@@ -228,6 +240,12 @@ namespace FileConverter.ConversionJobs
                     break;
 
                 case OutputType.Jpg:
+                    if (image.HasAlpha)
+                    {
+                        image.BackgroundColor = MagickColors.White;
+                        image.Alpha(AlphaOption.Remove);
+                    }
+
                     image.Quality = this.ConversionPreset.GetSettingsValue<uint>(ConversionPreset.ConversionSettingKeys.ImageQuality);
                     break;
 
@@ -246,8 +264,14 @@ namespace FileConverter.ConversionJobs
                     return;
             }
 
-            image.Write(this.OutputFilePath);
-            image.Progress -= this.Image_Progress;
+            try
+            {
+                image.Write(this.OutputFilePath);
+            }
+            finally
+            {
+                image.Progress -= this.Image_Progress;
+            }
         }
 
         private void Image_Progress(object sender, ProgressEventArgs eventArgs)

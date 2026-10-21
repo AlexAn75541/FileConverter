@@ -46,18 +46,25 @@ namespace FileConverterExtension
         {
             get
             {
-                string displayPresetIcons = PathHelpers.FileConverterRegistryKey.GetValue("DisplayPresetIcons") as string;
-                if (displayPresetIcons == null)
+                try
+                {
+                    string displayPresetIcons = PathHelpers.FileConverterRegistryKey?.GetValue("DisplayPresetIcons") as string;
+                    if (displayPresetIcons == null)
+                    {
+                        return false;
+                    }
+
+                    if (!bool.TryParse(displayPresetIcons, out bool value))
+                    {
+                        return false;
+                    }
+
+                    return value;
+                }
+                catch
                 {
                     return false;
                 }
-
-                if (!bool.TryParse(displayPresetIcons, out bool value))
-                {
-                    return false;
-                }
-
-                return value;
             }
         }
 
@@ -76,11 +83,16 @@ namespace FileConverterExtension
             this.RefreshExtensionCacheFromSelectedItems();
 
             PresetReference[] presets = this.PresetReferences;
+            if (presets == null)
+            {
+                return false;
+            }
+
             foreach (string extension in this.extensionCache)
             {
                 foreach (PresetReference presetReference in presets)
                 {
-                    if (presetReference.InputTypes.Contains(extension))
+                    if (presetReference != null && presetReference.InputTypes != null && presetReference.InputTypes.Contains(extension))
                     {
                         return true;
                     }
@@ -215,7 +227,7 @@ namespace FileConverterExtension
             {
                 foreach (PresetReference presetReference in presets)
                 {
-                    if (!presetReference.InputTypes.Contains(extension))
+                    if (presetReference == null || presetReference.InputTypes == null || !presetReference.InputTypes.Contains(extension))
                     {
                         continue;
                     }
@@ -270,31 +282,38 @@ namespace FileConverterExtension
 
         private void OpenSettings()
         {
-            if (string.IsNullOrEmpty(PathHelpers.FileConverterPath))
+            try
             {
-                MessageBox.Show("Can't retrieve the file converter executable path. You should try to reinstall the application.");
-                return;
-            }
+                if (string.IsNullOrEmpty(PathHelpers.FileConverterPath))
+                {
+                    MessageBox.Show("Can't retrieve the file converter executable path. You should try to reinstall the application.");
+                    return;
+                }
 
-            if (!File.Exists(PathHelpers.FileConverterPath))
-            {
-                MessageBox.Show($"Can't find the file converter executable ({PathHelpers.FileConverterPath}). You should try to reinstall the application.");
-                return;
-            }
+                if (!File.Exists(PathHelpers.FileConverterPath))
+                {
+                    MessageBox.Show($"Can't find the file converter executable ({PathHelpers.FileConverterPath}). You should try to reinstall the application.");
+                    return;
+                }
 
-            ProcessStartInfo processStartInfo = new ProcessStartInfo(PathHelpers.FileConverterPath)
-            {
-                CreateNoWindow = false, 
-                UseShellExecute = false, 
-                RedirectStandardOutput = false,
-            };
+                ProcessStartInfo processStartInfo = new ProcessStartInfo(PathHelpers.FileConverterPath)
+                {
+                    CreateNoWindow = false, 
+                    UseShellExecute = false, 
+                    RedirectStandardOutput = false,
+                };
 
-            // Build arguments string.
-            StringBuilder stringBuilder = new StringBuilder();
-            stringBuilder.Append("--settings");
+                // Build arguments string.
+                StringBuilder stringBuilder = new StringBuilder();
+                stringBuilder.Append("--settings");
             
-            processStartInfo.Arguments = stringBuilder.ToString();
-            Process exeProcess = Process.Start(processStartInfo);
+                processStartInfo.Arguments = stringBuilder.ToString();
+                Process.Start(processStartInfo);
+            }
+            catch (Exception exception)
+            {
+                MessageBox.Show($"Failed to launch settings: {exception.Message}");
+            }
         }
 
         private void ConvertFiles(string presetName)
@@ -362,17 +381,36 @@ namespace FileConverterExtension
                 }
             }
 
-            var processStartInfo = new ProcessStartInfo(PathHelpers.FileConverterPath)
+            try
             {
-                CreateNoWindow = false,
-                UseShellExecute = false,
-                RedirectStandardOutput = false,
-                Arguments = stringBuilder.ToString(),
-            };
+                var processStartInfo = new ProcessStartInfo(PathHelpers.FileConverterPath)
+                {
+                    CreateNoWindow = false,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = false,
+                    Arguments = stringBuilder.ToString(),
+                };
 
-            Process exeProcess = Process.Start(processStartInfo);
-            exeProcess.EnableRaisingEvents = true;
-            exeProcess.Exited += (sender, args) =>
+                Process exeProcess = Process.Start(processStartInfo);
+                if (exeProcess != null)
+                {
+                    exeProcess.EnableRaisingEvents = true;
+                    exeProcess.Exited += (sender, args) =>
+                    {
+                        if (fileListPath != null)
+                        {
+                            try
+                            {
+                                File.Delete(fileListPath);
+                            }
+                            catch 
+                            { 
+                            }
+                        }
+                    };
+                }
+            }
+            catch (Exception exception)
             {
                 if (fileListPath != null)
                 {
@@ -380,11 +418,13 @@ namespace FileConverterExtension
                     {
                         File.Delete(fileListPath);
                     }
-                    catch 
-                    { 
+                    catch
+                    {
                     }
                 }
-            };
+
+                MessageBox.Show($"Failed to launch File Converter: {exception.Message}");
+            }
         }
     }
 }
