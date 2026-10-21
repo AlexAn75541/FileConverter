@@ -243,7 +243,7 @@ namespace FileConverter.ConversionJobs
                     if (image.HasAlpha)
                     {
                         image.BackgroundColor = MagickColors.White;
-                        image.Alpha(AlphaOption.Remove);
+                        image.Alpha(AlphaAction.Remove);
                     }
 
                     image.Quality = this.ConversionPreset.GetSettingsValue<uint>(ConversionPreset.ConversionSettingKeys.ImageQuality);
