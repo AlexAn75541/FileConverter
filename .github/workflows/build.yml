@@ -48,8 +48,9 @@ jobs:
 
       - name: Restore NuGet Packages
         run: |
-          nuget restore FileConverter.sln
           dotnet restore Installer\Installer.wixproj
+          nuget restore FileConverter.sln -Properties Configuration=Release,Platform=x64
+          msbuild FileConverter.sln /t:Restore /p:Configuration=Release /p:Platform="x64"
 
       - name: Build Solution (Release x64)
         run: |
