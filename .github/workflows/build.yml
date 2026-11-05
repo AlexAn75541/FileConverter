@@ -116,7 +116,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: File Converter v2.2.1
+          name: File Converter ${{ github.ref_name }}
           files: |
             dist/FileConverter-2.2.1-x64-setup.msi
           body_path: RELEASE_NOTES.md

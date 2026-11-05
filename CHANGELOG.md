@@ -8,6 +8,7 @@
 - Fixes: PDF to image conversion crash when probing page counts before Ghostscript initialization (thanks to 0xyo).
 - Fixes: Loss of transparency when converting SVG to PNG/WebP/ICO and when encoding ICO files (thanks to Chimpanther).
 - Fixes: Windows Explorer context menu failure when registry keys are missing via HKLM and local assembly fallback paths with auto self-healing (thanks to DavidMWu).
+- Fixes: Version reporting consistency across application UI, CLI, shell extension DLL, and upgrade service feed.
 - Fixes: NullReferenceException when removing root folders or creating folders/presets in Settings view model.
 - Fixes: Potential memory leaks and process handle leaks across PowerPoint, Word, Excel, ImageMagick, and CDA conversion jobs.
 - Tech: Updated dependencies to latest versions: Magick.NET (15.0.0), CommunityToolkit.Mvvm (8.4.2), Microsoft.Extensions.DependencyInjection (10.0.13), Microsoft.Xaml.Behaviors.Wpf (1.1.161).
