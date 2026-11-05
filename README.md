@@ -75,7 +75,7 @@ File converter uses the following middlewares:
 **ffmpeg** (v8.0.1) as file conversion software.
 Thanks to ffmpeg devs for this awesome open source file conversion tool. [Web site link](https://ffmpeg.org)
 
-**ImageMagick** (v14.10) as image edition and conversion software.
+**ImageMagick** (v15.0) as image edition and conversion software.
 Thanks to image magick devs for this awesome open source image edition software suite.  [Web site link](http://imagemagick.net)
 And thanks to dlemstra for the C# wrapper of this software. [Github link](https://github.com/ImageMagick/ImageMagick)
 

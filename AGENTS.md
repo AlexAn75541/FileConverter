@@ -4,13 +4,13 @@ Instructions and context for automated agents working on the FileConverter codeb
 
 ## Repository Overview
 
-FileConverter is a Windows shell context menu file conversion utility written in C# targeting .NET Framework 4.8 and WiX v3 toolset for installer packaging.
+FileConverter is a Windows shell context menu file conversion utility written in C# targeting .NET Framework 4.8 and WiX v5 toolset for installer packaging.
 
 ### Solution Structure
 - `FileConverter.sln`: Main Visual Studio solution.
 - `Application/FileConverter/`: Core WPF application, conversion engine, preset system, and settings UI.
 - `Application/FileConverterExtension/`: Windows Explorer shell extension DLL registered into Windows context menus.
-- `Installer/`: WiX 3.11 `.wixproj` and `Product.wxs` producing `FileConverter-{version}-x64.msi`.
+- `Installer/`: WiX 5.0.2 `.wixproj` and `Product.wxs` producing `FileConverter-{version}-x64.msi`.
 - `Middleware/`: Third-party binaries (`ffmpeg/`, `gs/`) bundled with the application.
 - `Resources/`: Icons, color schemes, and artwork.
 
