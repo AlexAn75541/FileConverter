@@ -14,8 +14,8 @@ namespace FileConverter.ConversionJobs
 
     public partial class ConversionJob_FFMPEG : ConversionJob
     {
-        private readonly Regex durationRegex = new Regex(@"Duration:\s*([0-9][0-9]):([0-9][0-9]):([0-9][0-9])\.([0-9][0-9]),.*bitrate:\s*([0-9]+) kb\/s");
-        private readonly Regex progressRegex = new Regex(@"size=\s*([0-9]+).*time=([0-9][0-9]):([0-9][0-9]):([0-9][0-9]).([0-9][0-9])\s+bitrate=\s*([0-9]+.[0-9])");
+        private readonly Regex durationRegex = new Regex(@"Duration:\s*([0-9]{2}):([0-9]{2}):([0-9]{2})\.([0-9]{2})");
+        private readonly Regex progressRegex = new Regex(@"time=([0-9]{2}):([0-9]{2}):([0-9]{2})\.([0-9]{2})");
 
         private TimeSpan fileDuration;
         private TimeSpan actualConvertedDuration;
@@ -181,7 +181,7 @@ namespace FileConverter.ConversionJobs
                         transformArgs += $"fps={framesPerSecond}";
 
                         // Generate palette.
-                        string encoderArgs = $"-vf \"{transformArgs},palettegen\"";
+                        string encoderArgs = $"-vf \"{transformArgs},palettegen\" -update 1";
                         string arguments = $"{baseArgs} -i \"{this.InputFilePath}\" {encoderArgs} \"{paletteFilePath}\"";
                         this.ffmpegArgumentStringByPass.Add(new FFMpegPass("Indexing colors", arguments, paletteFilePath));
 
@@ -214,7 +214,7 @@ namespace FileConverter.ConversionJobs
                             scaleArgs = $"-vf scale=iw*{scaleFactor.ToString("#.##", CultureInfo.InvariantCulture)}:ih*{scaleFactor.ToString("#.##", CultureInfo.InvariantCulture)}";
                         }
 
-                        string encoderArgs = $"-q:v {this.JPGQualityToQualityIndex(encodingQuality)} {scaleArgs}";
+                        string encoderArgs = $"-q:v {this.JPGQualityToQualityIndex(encodingQuality)} -frames:v 1 -update 1 {scaleArgs}";
 
                         string arguments = $"{baseArgs} -i \"{this.InputFilePath}\" {encoderArgs} \"{this.OutputFilePath}\"";
 
@@ -349,7 +349,7 @@ namespace FileConverter.ConversionJobs
                         }
 
                         // http://www.howtogeek.com/203979/is-the-png-format-lossless-since-it-has-a-compression-parameter/
-                        string encoderArgs = $"-compression_level 100 {scaleArgs}";
+                        string encoderArgs = $"-compression_level 9 -frames:v 1 -update 1 {scaleArgs}";
 
                         string arguments = $"{baseArgs} -i \"{this.InputFilePath}\" {encoderArgs} \"{this.OutputFilePath}\"";
 
@@ -508,13 +508,12 @@ namespace FileConverter.ConversionJobs
                 return;
             }
             Match match = this.durationRegex.Match(input);
-            if (match.Success && match.Groups.Count >= 6)
+            if (match.Success && match.Groups.Count >= 5)
             {
                 int hours = int.Parse(match.Groups[1].Value);
                 int minutes = int.Parse(match.Groups[2].Value);
                 int seconds = int.Parse(match.Groups[3].Value);
                 int milliseconds = int.Parse(match.Groups[4].Value) * 10;
-                float bitrate = float.Parse(match.Groups[5].Value);
                 this.fileDuration = new TimeSpan(0, hours, minutes, seconds, milliseconds);
                 return;
             }
@@ -522,15 +521,12 @@ namespace FileConverter.ConversionJobs
             if (this.fileDuration.Ticks > 0)
             {
                 match = this.progressRegex.Match(input);
-                if (match.Success && match.Groups.Count >= 7)
+                if (match.Success && match.Groups.Count >= 5)
                 {
-                    int size = int.Parse(match.Groups[1].Value);
-                    int hours = int.Parse(match.Groups[2].Value);
-                    int minutes = int.Parse(match.Groups[3].Value);
-                    int seconds = int.Parse(match.Groups[4].Value);
-                    int milliseconds = int.Parse(match.Groups[5].Value) * 10;
-                    float bitrate = 0f;
-                    float.TryParse(match.Groups[6].Value, out bitrate);
+                    int hours = int.Parse(match.Groups[1].Value);
+                    int minutes = int.Parse(match.Groups[2].Value);
+                    int seconds = int.Parse(match.Groups[3].Value);
+                    int milliseconds = int.Parse(match.Groups[4].Value) * 10;
 
                     this.actualConvertedDuration = new TimeSpan(0, hours, minutes, seconds, milliseconds);
 
